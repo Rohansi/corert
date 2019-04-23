@@ -19,6 +19,7 @@ namespace Internal.IL
             ReadOnly = 1 << 1,
             PermanentHome = 1 << 2,
             ThisPtr = 1 << 3,
+            InitOnly = 1 << 4,
         }
         private StackValueFlags Flags;
 
@@ -64,6 +65,11 @@ namespace Internal.IL
         public bool IsThisPtr
         {
             get { return (Flags & StackValueFlags.ThisPtr) == StackValueFlags.ThisPtr; }
+        }
+
+        public bool IsInitOnly
+        {
+            get { return (Flags & StackValueFlags.InitOnly) == StackValueFlags.InitOnly; }
         }
 
         public bool IsNullReference
@@ -112,11 +118,12 @@ namespace Internal.IL
             return new StackValue(StackValueKind.ValueType, type);
         }
 
-        static public StackValue CreateByRef(TypeDesc type, bool readOnly = false, bool permanentHome = false)
+        static public StackValue CreateByRef(TypeDesc type, bool readOnly = false, bool permanentHome = false, bool initOnly = false)
         {
             return new StackValue(StackValueKind.ByRef, type, null,
                 (readOnly ? StackValueFlags.ReadOnly : StackValueFlags.None) | 
-                (permanentHome ? StackValueFlags.PermanentHome : StackValueFlags.None));
+                (permanentHome ? StackValueFlags.PermanentHome : StackValueFlags.None) |
+                (initOnly ? StackValueFlags.InitOnly : StackValueFlags.None));
         }
 
         static public StackValue CreateMethod(MethodDesc method)
@@ -252,6 +259,9 @@ namespace Internal.IL
         public static bool TryMergeStackValues(StackValue valueA, StackValue valueB, out StackValue merged)
         {
             merged = valueA;
+
+            if (valueA.IsInitOnly || valueB.IsInitOnly)
+                return false;
 
             if (valueB.IsReadOnly)
                 merged.SetIsReadOnly();

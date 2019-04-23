@@ -23,11 +23,19 @@
     }
 }
 
+.class public sequential ansi sealed beforefieldinit TestStruct
+	extends [System.Runtime]System.ValueType
+{
+	.field public initonly int32 InitonlyField
+    .field public int32 Field
+}
+
 .class public auto ansi beforefieldinit FieldTestsType
         extends [System.Runtime]System.Object
 {
     .field public initonly int32 InstanceInitonlyField
     .field public static initonly int32 StaticInitonlyField
+    .field public initonly valuetype TestStruct StructField
 
     .method public instance void Stsfld.UnsatisfiedParentConstraints_Invalid_UnsatisfiedFieldParentInst() cil managed
     {
@@ -44,10 +52,37 @@
         ret
     }
 
-    .method public instance void Ldflda.InitonlyFieldOutsideCtor_Invalid_InitOnly() cil managed
+    .method public instance void Ldflda.InitonlyFieldOutsideCtor_Valid() cil managed
     {
         ldarg.0
         ldflda  int32 FieldTestsType::InstanceInitonlyField
+        pop
+        ret
+    }
+
+    .method public instance void Ldflda.InitonlySubFieldOutsideCtor_Valid() cil managed
+    {
+        ldarg.0
+        ldflda  valuetype TestStruct FieldTestsType::StructField
+        ldfld   int32 valuetype TestStruct::Field
+        pop
+        ret
+    }
+
+    .method public instance void Ldflda.InitonlyWriteSubFieldOutsideCtor_Invalid_InitOnly() cil managed
+    {
+        ldarg.0
+        ldflda  valuetype TestStruct FieldTestsType::StructField
+        ldc.i4.1
+        stfld   int32 valuetype TestStruct::Field
+        ret
+    }
+
+    .method public instance void Ldflda.InitonlySubFieldInitonlyOutsideCtor_Valid() cil managed
+    {
+        ldarg.0
+        ldflda  valuetype TestStruct FieldTestsType::StructField
+        ldfld   int32 valuetype TestStruct::InitonlyField
         pop
         ret
     }
@@ -117,13 +152,24 @@
         ret
     }
 
-    .method public hidebysig instance void 'special.LdsfldInitonlyInCtor..ctor_Invalid_InitOnly'(char) cil managed { ret }
+    .method public hidebysig instance void 'special.LdsfldInitonlyInCtor..ctor_Valid'(char) cil managed { ret }
     .method public hidebysig specialname rtspecialname instance void .ctor(char) cil managed 
     {
         ldarg.0
         call    instance void [System.Runtime]System.Object::.ctor()
         ldsflda int32 FieldTestsType::StaticInitonlyField
         pop
+        ret
+    }
+
+    .method public hidebysig instance void 'special.LdsfldWriteInitonlyInCtor..ctor_Invalid_InitOnly'(int16) cil managed { ret }
+    .method public hidebysig specialname rtspecialname instance void .ctor(int16) cil managed 
+    {
+        ldarg.0
+        call    instance void [System.Runtime]System.Object::.ctor()
+        ldsflda int32 FieldTestsType::StaticInitonlyField
+        ldc.i4.1
+        stind.i4
         ret
     }
 
@@ -152,6 +198,10 @@
         ldsfld class OtherType OtherType::Instance
         ldflda int32 OtherType::InstanceInitonlyField
         pop
+        ldsfld class OtherType OtherType::Instance
+        ldflda int32 OtherType::InstanceInitonlyField
+        ldc.i4.2
+        stind.i4
         ldsfld class OtherType OtherType::Instance
         ldc.i4.0
         stfld  int32 OtherType::InstanceInitonlyField

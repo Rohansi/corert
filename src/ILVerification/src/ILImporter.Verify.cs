@@ -1531,6 +1531,7 @@ again:
                     var declared = StackValue.CreateFromType(sig[i]);
 
                     CheckIsAssignable(actual, declared);
+                    Check(!actual.IsInitOnly, VerifierError.InitOnly); // no passing initonly refs around
 
                     // check that the argument is not a byref for tailcalls
                     if (tailCall)
@@ -1816,6 +1817,7 @@ again:
                     CheckIsAssignable(actualReturnType, StackValue.CreateFromType(declaredReturnType));
 
                     Check((!declaredReturnType.IsByRef && !declaredReturnType.IsByRefLike) || actualReturnType.IsPermanentHome, VerifierError.ReturnPtrToStack);
+                    Check(!actualReturnType.IsInitOnly, VerifierError.InitOnly); // no returning initonly refs
                 }
             }
         }
@@ -2072,6 +2074,7 @@ again:
         {
             var field = ResolveFieldToken(token);
             bool isPermanentHome = false;
+            bool isInitOnly = false; // set to true when writes are invalid because it is initonly
 
             TypeDesc instance;
             if (isStatic)
@@ -2082,7 +2085,7 @@ again:
                 instance = null;
 
                 if (field.IsInitOnly)
-                    Check(_method.IsStaticConstructor && field.OwningType == _method.OwningType, VerifierError.InitOnly);
+                    isInitOnly = !_method.IsStaticConstructor || field.OwningType != _method.OwningType;
             }
             else
             {
@@ -2092,6 +2095,12 @@ again:
                 // satisfy the same constraints as a non-static field  This happens to
                 // be simpler and seems reasonable
                 var actualThis = Pop(allowUninitThis: true);
+
+                // When accessing nested fields there may be several ldfla instructions
+                // chained so this needs to propagate through
+                if (actualThis.IsInitOnly)
+                    isInitOnly = true;
+
                 if (actualThis.Kind == StackValueKind.ValueType)
                     actualThis = StackValue.CreateByRef(actualThis.Type);
 
@@ -2103,13 +2112,13 @@ again:
                 isPermanentHome = actualThis.Kind == StackValueKind.ObjRef || actualThis.IsPermanentHome;
                 instance = actualThis.Type;
 
-                if (field.IsInitOnly)
-                    Check(_method.IsConstructor && field.OwningType == _method.OwningType && actualThis.IsThisPtr, VerifierError.InitOnly);
+                if (!isInitOnly && field.IsInitOnly)
+                    isInitOnly = !_method.IsConstructor || field.OwningType != _method.OwningType || !actualThis.IsThisPtr;
             }
 
             Check(_method.OwningType.CanAccess(field, instance), VerifierError.FieldAccess);
 
-            Push(StackValue.CreateByRef(field.FieldType, false, isPermanentHome));
+            Push(StackValue.CreateByRef(field.FieldType, false, isPermanentHome, isInitOnly));
         }
 
         void ImportStoreField(int token, bool isStatic)
@@ -2139,6 +2148,10 @@ again:
                 // satisfy the same constraints as a non-static field  This happens to
                 // be simpler and seems reasonable
                 var actualThis = Pop(allowUninitThis: true);
+
+                // Cannot set field here because the 'this' value could be an initonly struct
+                Check(!owningType.IsValueType || !actualThis.IsInitOnly, VerifierError.InitOnly);
+
                 if (actualThis.Kind == StackValueKind.ValueType)
                     actualThis = StackValue.CreateByRef(actualThis.Type);
 
@@ -2200,6 +2213,7 @@ again:
             var address = Pop();
 
             Check(!address.IsReadOnly, VerifierError.ReadOnlyIllegalWrite);
+            Check(!address.IsInitOnly, VerifierError.InitOnly);
 
             CheckIsByRef(address);
 
@@ -2237,6 +2251,8 @@ again:
             var value = Pop();
 
             Check(value.Kind == StackValueKind.ByRef, VerifierError.StackByRef, value);
+            Check(!value.IsReadOnly, VerifierError.ReadOnlyIllegalWrite);
+            Check(!value.IsInitOnly, VerifierError.InitOnly);
 
             CheckIsAssignable(value, StackValue.CreateByRef(type));
         }
